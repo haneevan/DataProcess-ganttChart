@@ -1,42 +1,47 @@
 import pandas as pd
 import plotly.express as px
 
-# 1. データの読み込み（文字コードをShift_JISに指定）
-df = pd.read_csv("data/WorkReport_20260620 3.csv", skiprows=3, encoding="shift_jis")
+data_file_path = "data/WorkReport_20260620 3.csv"
+# 1. Read metadata FIRST to grab the Date and Operator Name dynamically
+# We read the first two rows before skipping them for the main chart data
+meta_df = pd.read_csv(data_file_path, nrows=2, header=None, encoding="shift_jis")
+log_date = str(meta_df.iloc[0, 1]).split(" ")[0].replace("/", "-").strip() # Pulls "2026-06-19"
+operator_name = str(meta_df.iloc[1, 1]).strip()                            # Pulls "クンチョロ"
 
-# 空白文字などのブレを防ぐためカラム名をトリミング
+# 2. Load the main activity data table (skipping the top metadata header)
+df = pd.read_csv(data_file_path, skiprows=3, encoding="shift_jis")
 df.columns = df.columns.str.strip()
 
-# 2. 日付と時刻を結合してDatetime型に変換
-# ※1枚目の画像にあった「2026/6/19」を基準にしています
-date_str = "2026-06-19 "
-df['start_dt'] = pd.to_datetime(date_str + df['start time'].astype(str))
-df['end_dt'] = pd.to_datetime(date_str + df['end time'].astype(str))
+# 3. Combine retrieved date string with timestamps to build Datetime structures
+df['start_dt'] = pd.to_datetime(log_date + " " + df['start time'].astype(str))
+df['end_dt'] = pd.to_datetime(log_date + " " + df['end time'].astype(str))
 
-# 3. 画像のような「設備 > 作業内容」の階層構造をY軸で表現するためのラベルを作成
-# これにより、同じ設備の中で作業内容ごとに別々の行（段差）が自動で割り振られます
+# 4. Format row labels dynamically
 df['y_axis_label'] = df['設備'] + " - " + df['work type']
 
-# 4. ガントチャート（タイムライン）の描画
+# 5. Build dynamic subtitle details directly inside HTML break tags
+chart_title = f"設備・作業別 タイムラインチャート<br><sup>日付: {log_date} | 作業者: {operator_name}</sup>"
+
+# 6. Drawing the Gantt Chart with color mapped to activity types
 fig = px.timeline(
     df, 
     x_start="start_dt", 
     x_end="end_dt", 
-    y="y_axis_label",       # 設備と作業内容をセットにしたラベルを行に指定
-    color="設備",           # 設備（PRP-42、PRP-40、その他）ごとにバーの色を分ける
-    title="設備・作業別 タイムラインチャート",
-    hover_data=["work type"] # マウスを当てたときに作業内容を表示
+    y="y_axis_label",       
+    color="work type",      
+    title=chart_title,      # Injected dynamic metadata header strings here
+    hover_data=["work type"] 
 )
 
-# 5. レイアウトの調整（見やすさを画像に近づける）
+# 7. Adjust layouts and axis structures
 fig.update_yaxes(
-    categoryorder="category descending", # 設備名で綺麗に並ぶようソート
+    categoryorder="category descending", 
     title_text="設備 / 作業内容"
 )
 fig.update_xaxes(
     title_text="時間（タイムライン）",
-    tickformat="%H:%M:%S" # 軸の表記を「時:分:秒」にフォーマット
+    tickformat="%H:%M:%S" 
 )
 
-# 6. ブラウザでインタラクティブなチャートを表示
+# 8. Render in user's browser window
 fig.show()
