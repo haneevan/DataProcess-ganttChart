@@ -1,7 +1,31 @@
 import pandas as pd
 import plotly.express as px
 
-data_file_path = "data/WorkReport_20260619 2.csv"
+data_file_path = "data/WorkReport_20260619 4.csv"
+
+# Create the explicit mapping match matching the Android hex codes
+color_map = {
+    # Machine Activities
+    "点検": "#1E88E5",
+    "測定": "#00ACC1",
+    "加工": "#43A047",
+    "箱替え": "#8E24AA",
+    "段取り": "#3949AB",
+    "材替え": "#00897B",
+    "クレーン": "#5E35B1",
+    "終わり": "#546E7A",
+    
+    # Miscellaneous Activities
+    "朝礼": "#FFFFB3",
+    "4S": "#7CB342",
+    "打ち合わせ": "#FB8C00",
+    "QC": "#D81B60",
+    "残業": "#E53935",
+    "選別": "#6D4C41",
+    "休憩": "#FDD835",
+    "その他": "#757575"
+}
+
 # 1. Read metadata FIRST to grab the Date and Operator Name dynamically
 # We read the first two rows before skipping them for the main chart data
 meta_df = pd.read_csv(data_file_path, nrows=2, header=None, encoding="shift_jis")
@@ -30,7 +54,8 @@ fig = px.timeline(
     y="y_axis_label",       
     color="内容",      
     title=chart_title,      # Injected dynamic metadata header strings here
-    hover_data=["内容"] 
+    hover_data=["内容"] ,
+    color_discrete_map=color_map
 )
 
 # 7. Adjust layouts and axis structures
