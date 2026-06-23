@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  </head>
+<body>
+
+<div class="navbar">
+  <button class="nav-btn" id="btn-back" onclick="goBack()" disabled>← 戻る</button>
+  <h1>作業日報管理システム</h1>
+  <span class="breadcrumb" id="breadcrumb">ホーム</span>
+  <button class="nav-btn" id="btn-fwd" onclick="goSummary()" disabled>サマリー →</button>
+</div>
+
+<div class="screen active" id="screen-home">
+  <div class="home-wrap">
+    <div class="home-card">
+      <h2>📋 データ選択</h2>
+      <div class="field-group">
+        <label>日付</label>
+        <input type="date" id="dateInput">
+      </div>
+      <div class="field-group">
+        <label>作業者名</label>
+        <select id="opSelect">
+          <option value="">-- 読み込み中... --</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="showGantt()">ガントチャートを表示 →</button>
+      <p class="home-hint">data/ フォルダ内の CSV ファイルから自動検出</p>
+    </div>
+
+    <div class="op-panel">
+      <h3>
+        <span>👤 作業者一覧</span>
+        <span id="op-count" style="font-size:12px; color:#888; font-weight:normal;"></span>
+      </h3>
+      <input type="text" id="opSearchInput" class="op-search" placeholder="作業者名で検索..." oninput="filterOperatorDirectory()">
+      <div class="op-list" id="opDirectoryList">
+        <div style="padding:16px; color:#999; font-size:13px; text-align:center;">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-gantt">
+  <div id="gantt-wrapper">
+    <div style="padding:40px;color:#999;font-size:15px;">⏳ 読み込み中...</div>
+  </div>
+</div>
+
+<div class="screen" id="screen-summary">
+  <div class="sum-wrap">
+    <div class="sum-header">
+      <h2 id="sum-title">作業サマリー</h2>
+      <p id="sum-sub"></p>
+    </div>
+    <div class="sum-grid">
+      <div class="sum-panel">
+        <h3>作業別 時間内訳</h3>
+        <div id="pie-container"></div>
+      </div>
+      <div class="sum-panel">
+        <h3>合計時間テーブル</h3>
+        <table class="act-table">
+          <thead>
+            <tr><th>作業内容</th><th>合計時間</th><th>割合</th></tr>
+          </thead>
+          <tbody id="sum-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
