@@ -5,23 +5,26 @@ import plotly.graph_objects as go
 import webview
 
 COLOR_MAP = {
-    "点検": "#1E88E5",
-    "測定": "#00ACC1",
-    "加工": "#43A047",
-    "箱替え": "#8E24AA",
-    "段取り": "#3949AB",
-    "材替え": "#00897B",
-    "クレーン": "#5E35B1",
-    "終わり": "#546E7A",
-    "手待ち": "#FF0000",
-    "朝礼": "#FDD835",
-    "4S": "#7CB342",
-    "打ち合わせ": "#FB8C00",
-    "QC": "#D81B60",
-    "残業": "#E53935",
-    "選別": "#6D4C41",
-    "休憩": "#FFCA28",
-    "その他": "#757575"
+    # --- Machine Activities ---
+    "仕掛り | 終わり": "#1E88E5",  # Vivid Blue
+    "測定":           "#00ACC1",  # Deep Cyan/Teal
+    "箱替え":         "#8E24AA",  # Purple
+    "材替え":         "#3949AB",  # Indigo
+    "段取り":         "#00897B",  # Dark Teal
+    "運搬":           "#5E35B1",  # Deep Purple
+    "金型調整":       "#546E7A",  # Slate Blue Gray
+    "機械故障":       "#E53935",  # Deep Alert Red
+    "設備復旧":       "#FDD835",  # Bright Sun Yellow
+    "スクラップ":     "#757575",  # Neutral Gray
+    # --- Miscellaneous Activities ---
+    "4S":             "#7CB342",  # Light Apple Green
+    "朝礼":           "#FFB300",  # Amber / Warning Yellow
+    "打ち合わせ":     "#FB8C00",  # Orange
+    "QC":             "#D81B60",  # Magenta/Pink
+    "休憩":           "#FDD835",  # Bright Sun Yellow
+    "教育":           "#5E35B1",  # Deep Purple
+    "その他":         "#757575",  # Neutral Gray
+    "手待ち":         "#FF1200",  # RED
 }
 
 # Height constants (px)
@@ -93,10 +96,10 @@ class Api:
             for _, row in df.iterrows():
                 equip = row['設備']
                 act   = row['内容']
-                color = COLOR_MAP.get(act, "#9E9E9E")
+                color = COLOR_MAP.get(act, "#B0BEC5")
                 yi    = y_index[(equip, act)]
-                x0    = row['start_dt'].timestamp() * 1000
-                x1    = row['end_dt'].timestamp()   * 1000
+                x0    = row['start_dt'].isoformat()
+                x1    = row['end_dt'].isoformat()
                 dur_s = int((row['end_dt'] - row['start_dt']).total_seconds())
 
                 shapes.append(dict(
@@ -108,8 +111,8 @@ class Api:
                     line=dict(width=0),
                     opacity=0.92
                 ))
-                # invisible hover point at bar center
-                cx = (x0 + x1) / 2
+                # invisible hover point at bar center (midpoint datetime)
+                cx = (row['start_dt'] + (row['end_dt'] - row['start_dt']) / 2).isoformat()
                 hover_x.append(cx)
                 hover_y.append(yi)
                 hover_text.append(
@@ -151,9 +154,11 @@ class Api:
                     tick_texts.append(f"　{act}")   # leading full-width space = indent
 
             # X axis: epoch ms range
-            x_min = df['start_dt'].min().timestamp() * 1000
-            x_max = df['end_dt'].max().timestamp()   * 1000
-            pad   = (x_max - x_min) * 0.01
+            x_min = df['start_dt'].min().isoformat()
+            x_max = df['end_dt'].max().isoformat()
+            # pad of 2 minutes on each side
+            x_min_pad = (df['start_dt'].min() - pd.Timedelta(minutes=2)).isoformat()
+            x_max_pad = (df['end_dt'].max()   + pd.Timedelta(minutes=2)).isoformat()
 
             fig = go.Figure()
 
@@ -176,7 +181,7 @@ class Api:
                     fig.add_trace(go.Scatter(
                         x=[None], y=[None],
                         mode="markers",
-                        marker=dict(size=12, color=COLOR_MAP.get(act, "#9E9E9E"), symbol="square"),
+                        marker=dict(size=12, color=COLOR_MAP.get(act, "#B0BEC5"), symbol="square"),
                         name=act,
                         showlegend=True
                     ))
@@ -190,7 +195,7 @@ class Api:
                 ),
                 shapes=shapes,
                 xaxis=dict(
-                    range=[x_min - pad, x_max + pad],
+                    range=[x_min_pad, x_max_pad],
                     tickformat="%H:%M",
                     showgrid=True, gridcolor="#e8e8e8",
                     title="時間（タイムライン）",
@@ -278,6 +283,7 @@ if __name__ == "__main__":
         html=UI_HTML,
         js_api=api,
         width=1200,
-        height=850
+        height=850,
+        maximized=True,
     )
     webview.start()
