@@ -3,15 +3,7 @@ let screen       = 'home';
 let selDate      = '';
 let selOperator  = '';
 let allCsvList   = [];
-
-const COLOR_MAP = {
-  "仕掛り | 終わり": "#1E88E5", "測定": "#00ACC1", "箱替え": "#8E24AA",
-  "材替え": "#3949AB", "段取り": "#00897B", "運搬": "#5E35B1",
-  "金型調整": "#546E7A", "機械故障": "#E53935", "設備復旧": "#FDD835",
-  "スクラップ": "#757575", "4S": "#7CB342", "朝礼": "#FFB300",
-  "打ち合わせ": "#FB8C00", "QC": "#D81B60", "休憩": "#FDD835",
-  "教育": "#5E35B1", "その他": "#757575", "手待ち": "#FF1200"
-};
+let COLOR_MAP    = {};
 const DEFAULT_CLR = "#B0BEC5";
 
 // ── Navigation ──────────────────────────────────────────────────
@@ -121,7 +113,7 @@ window.addEventListener('pywebviewready', function () {
   });
 });
 
-// ── Gantt ───────────────────────────────────────────────────────
+// ── Fixed Gantt Chart Renderer ───────────────────────────────────
 function showGantt() {
   selDate     = document.getElementById('dateInput').value;
   selOperator = document.getElementById('opSelect').value;
@@ -134,13 +126,43 @@ function showGantt() {
 
   pywebview.api.request_chart_render(selDate, selOperator).then(function (html) {
     wrapper.innerHTML = html;
-    Array.from(wrapper.getElementsByTagName('script')).forEach(function (old) {
-      const s = document.createElement('script');
-      s.type = 'text/javascript';
-      if (old.src) s.src = old.src; else s.textContent = old.textContent;
-      document.body.appendChild(s);
-      old.remove();
-    });
+    
+    const scripts = Array.from(wrapper.getElementsByTagName('script'));
+    
+    // Separate external CDN script references from actual configuration scripts
+    const srcScripts = scripts.filter(s => s.src);
+    const inlineScripts = scripts.filter(s => !s.src);
+
+    let loadedCount = 0;
+
+    function runInlineScripts() {
+      inlineScripts.forEach(function (old) {
+        const s = document.createElement('script');
+        s.type = 'text/javascript';
+        s.textContent = old.textContent;
+        document.body.appendChild(s);
+        old.remove();
+      });
+    }
+
+    if (srcScripts.length === 0) {
+      runInlineScripts();
+    } else {
+      // Force inline chart configuration execution ONLY after global dependencies completely finish mounting
+      srcScripts.forEach(function (old) {
+        const s = document.createElement('script');
+        s.type = 'text/javascript';
+        s.src = old.src;
+        s.onload = function() {
+          loadedCount++;
+          if (loadedCount === srcScripts.length) {
+            runInlineScripts();
+          }
+        };
+        document.body.appendChild(s);
+        old.remove();
+      });
+    }
   });
 }
 

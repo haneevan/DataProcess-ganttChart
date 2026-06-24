@@ -224,6 +224,10 @@ class Api:
             import traceback
             return json.dumps({"error": str(e) + "\n" + traceback.format_exc()})
 
+    def get_color_map(self):
+        """Expose the Python COLOR_MAP directly to the JavaScript frontend"""
+        return json.dumps(COLOR_MAP, ensure_ascii=False)
+
 # ── PyInstaller Path Resolver & Asset Loader ───────────────────────
 def get_asset_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
