@@ -9,7 +9,7 @@
   <button class="nav-btn" id="btn-back" onclick="goBack()" disabled>← 戻る</button>
   <h1>作業日報管理システム</h1>
   <span class="breadcrumb" id="breadcrumb">ホーム</span>
-  <button class="nav-btn" id="btn-fwd" onclick="goSummary()" disabled>サマリー →</button>
+  <button class="nav-btn" id="btn-fwd" onclick="goSummary()" disabled>まとめ →</button>
 </div>
 
 <div class="screen active" id="screen-home">
@@ -52,13 +52,14 @@
 <div class="screen" id="screen-summary">
   <div class="sum-wrap">
     <div class="sum-header">
-      <h2 id="sum-title">作業サマリー</h2>
+      <h2 id="sum-title">作業まとめ</h2>
       <p id="sum-sub"></p>
     </div>
     <div class="sum-grid">
       <div class="sum-panel">
         <h3>作業別 時間内訳</h3>
         <div id="pie-container"></div>
+        <div id="bar-container"></div>
       </div>
       <div class="sum-panel">
         <h3>合計時間テーブル</h3>

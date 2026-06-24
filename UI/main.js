@@ -22,7 +22,7 @@ function showScreen(id) {
     crumb.textContent = 'ホーム > ガント（' + selDate + ' / ' + selOperator + '）';
   } else if (id === 'summary') {
     back.disabled = false; fwd.disabled = true;
-    crumb.textContent = 'ホーム > ガント > サマリー';
+    crumb.textContent = 'ホーム > ガント > まとめ';
   }
 }
 
@@ -97,22 +97,32 @@ window.addEventListener('pywebviewready', function () {
     populateOps(this.value);
   });
 
-  pywebview.api.get_csv_list().then(function (raw) {
+  // 1. Get today's local date formatted perfectly as YYYY-MM-DD
+  const today = new Date();
+  const offset = today.getTimezoneOffset();
+  const localToday = new Date(today.getTime() - (offset * 60 * 1000)).toISOString().slice(0, 10);
+
+  // 2. Fetch the color configurations from Python
+  pywebview.api.get_color_map().then(function (mapRaw) {
+    COLOR_MAP = JSON.parse(mapRaw);
+    return pywebview.api.get_csv_list();
+  }).then(function (raw) {
     allCsvList = JSON.parse(raw);
     buildOperatorDirectory();
 
-    if (allCsvList.length > 0) {
-      dateInput.value = allCsvList[0].date;
-      populateOps(allCsvList[0].date);
+    // 3. Set the date picker value to today's date right away
+    dateInput.value = localToday;
+    populateOps(localToday);
+
+    // 4. Try to select the first operator available for today, otherwise fallback
+    const opsForToday = allCsvList.filter(r => r.date === localToday);
+    if (opsForToday.length > 0) {
+      document.getElementById('opSelect').value = opsForToday[0].operator;
+    } else if (allCsvList.length > 0) {
       document.getElementById('opSelect').value = allCsvList[0].operator;
-    } else {
-      const today = new Date().toISOString().slice(0, 10);
-      dateInput.value = today;
-      populateOps(today);
     }
   });
 });
-
 // ── Fixed Gantt Chart Renderer ───────────────────────────────────
 function showGantt() {
   selDate     = document.getElementById('dateInput').value;
@@ -170,7 +180,9 @@ function showGantt() {
 function goSummary() {
   showScreen('summary');
   document.getElementById('pie-container').innerHTML =
-    '<div style="padding:20px;color:#aaa;">読み込み中...</div>';
+    '<div style="padding:20px;color:#aaa;"></div>';
+  document.getElementById('bar-container').innerHTML =
+    '<div style="padding:20px;color:#aaa;"></div>';
   document.getElementById('sum-tbody').innerHTML = '';
 
   pywebview.api.get_summary_data(selDate, selOperator).then(function (raw) {
@@ -181,7 +193,7 @@ function goSummary() {
       return;
     }
 
-    document.getElementById('sum-title').textContent = '作業サマリー — ' + data.operator;
+    document.getElementById('sum-title').textContent = '作業まとめ | ' + data.operator;
     document.getElementById('sum-sub').textContent = '日付: ' + data.date + ' ／ 総作業時間: ' + fmtSec(data.total_seconds);
 
     const acts   = data.by_activity;
@@ -200,10 +212,24 @@ function goSummary() {
         customdata: values.map(fmtSec),
         hole: 0.38, sort: false
       }], {
-        margin: { t: 10, b: 10, l: 10, r: 10 },
-        showlegend: false, paper_bgcolor: 'white', height: 300
+        margin: { t: 2, b: 1, l: 10, r: 10 },
+        showlegend: false, paper_bgcolor: 'white', height: 325
       }, { responsive: true, displayModeBar: false });
-    }
+      
+        Plotly.newPlot('bar-container', [{
+            type: 'bar',
+            x: values, // Seconds or formatted minutes
+            y: labels, // Activity Names
+            orientation: 'h',
+            marker: { color: colors }
+            }], {
+            margin: { t: 20, b: 30, l: 100, r: 10 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            height: 300,
+            }, { responsive: true, displayModeBar: false });
+        }
+
     tryPie();
 
     const tbody = document.getElementById('sum-tbody');
