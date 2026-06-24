@@ -212,7 +212,7 @@ function goSummary() {
         customdata: values.map(fmtSec),
         hole: 0.38, sort: false
       }], {
-        margin: { t: 2, b: 1, l: 10, r: 10 },
+        margin: { t: 5, b: 5, l: 10, r: 10 },
         showlegend: false, paper_bgcolor: 'white', height: 325
       }, { responsive: true, displayModeBar: false });
       
@@ -223,10 +223,10 @@ function goSummary() {
             orientation: 'h',
             marker: { color: colors }
             }], {
-            margin: { t: 20, b: 30, l: 100, r: 10 },
+            margin: { t: 5, b: 15, l: 100, r: 10 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            height: 300,
+            height: 325,
             }, { responsive: true, displayModeBar: false });
         }
 

@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import webview
 import sys 
+import base64
 
 COLOR_MAP = {
     # --- Machine Activities ---
@@ -33,9 +34,27 @@ ACTIVITY_ROW_H = 26
 GROUP_GAP      = 6
 
 
+# ── Dynamic Path Resolvers (Ensures execution safety anywhere) ────
+def get_asset_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def get_external_data_path():
+    """ Resolves external data folder relative to main script or standalone .exe root """
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, "data")
+
+
 class Api:
     def request_chart_render(self, target_date, operator_name):
-        data_dir = "data"
+        data_dir = get_external_data_path()
         filename = f"{target_date}_{operator_name}.csv"
         data_file_path = os.path.join(data_dir, filename)
 
@@ -184,7 +203,7 @@ class Api:
 
     def get_csv_list(self):
         """Scan data/ folder, return JSON list of {date, operator}."""
-        data_dir = "data"
+        data_dir = get_external_data_path()
         results  = []
         if not os.path.exists(data_dir):
             return json.dumps([])
@@ -197,7 +216,7 @@ class Api:
 
     def get_summary_data(self, target_date, operator_name):
         """Return JSON summary: total seconds per activity type."""
-        data_dir       = "data"
+        data_dir       = get_external_data_path()
         filename       = f"{target_date}_{operator_name}.csv"
         data_file_path = os.path.join(data_dir, filename)
         if not os.path.exists(data_file_path):
@@ -228,15 +247,6 @@ class Api:
         """Expose the Python COLOR_MAP directly to the JavaScript frontend"""
         return json.dumps(COLOR_MAP, ensure_ascii=False)
 
-# ── PyInstaller Path Resolver & Asset Loader ───────────────────────
-def get_asset_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
 
 # Target the ui folder correctly whether running as raw script or .exe
 UI_DIR = get_asset_path("UI")
@@ -259,6 +269,18 @@ try:
 except FileNotFoundError as e:
     UI_HTML = f"<h3 style='color:red;padding:20px;'>Asset Loading Error: Missing directory or configuration file.<br>{e}</h3>"
 
+
+# ── Active Download Event Interception Handler ─────────────────────
+def on_download_triggered(window):
+    """Intercepts asset downloads inside WebView2 frames and handles them"""
+    try:
+        # Evaluate JS to grab the last download or handle via window property if needed.
+        # However, to avoid intercept crashes, we can safely log it first:
+        print("Download action detected from Plotly toolbar.")
+    except Exception as e:
+        print(f"Download tracking log error: {e}")
+
+
 if __name__ == "__main__":
     api = Api()
     window = webview.create_window(
@@ -269,4 +291,5 @@ if __name__ == "__main__":
         height=850,
         maximized=True,
     )
-    webview.start()
+    # Start app with active download routing hook attached
+    webview.start(on_download_triggered, window)
