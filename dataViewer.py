@@ -4,7 +4,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import webview
 import sys 
-import base64
 
 COLOR_MAP = {
     # --- Machine Activities ---
@@ -34,7 +33,6 @@ ACTIVITY_ROW_H = 26
 GROUP_GAP      = 6
 
 
-# ── Dynamic Path Resolvers (Ensures execution safety anywhere) ────
 def get_asset_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -52,9 +50,7 @@ def get_external_data_path():
     return os.path.join(base_dir, "data")
 
 
-# ── PERSISTENT CONFIG HELPERS ──────────────────────────────────────
 def save_current_colors():
-    """Helper function to cleanly commit current memory state to file storage"""
     try:
         data_dir = get_external_data_path()
         os.makedirs(data_dir, exist_ok=True)
@@ -65,43 +61,36 @@ def save_current_colors():
         print(f"Failed to save color layout config changes: {e}")
 
 def load_saved_colors():
-    """Safely reads saved custom colors from data directory if file exists"""
     try:
         config_path = os.path.join(get_external_data_path(), "color_config.json")
         if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as f:
                 saved_colors = json.load(f)
-                COLOR_MAP.update(saved_colors)  # Merge saved choices into hardcoded defaults
+                COLOR_MAP.update(saved_colors)
     except Exception as e:
         print(f"Failed to load persistent colors: {e}")
 
-# Run color injection immediately at load runtime
+# Load colors immediately upon script execution start
 load_saved_colors()
 
 
 class Api:
     def get_registered_activities(self):
-        """Exposes current colors to Settings panel view"""
         return COLOR_MAP
 
     def update_activity_color(self, activity_name, hex_color):
-        """Updates a color in memory AND permanently saves it to data/color_config.json"""
         COLOR_MAP[activity_name] = hex_color
         save_current_colors()
         return {"status": "success", "activity": activity_name, "color": hex_color}
 
-    # ── NEW FEATURE: DELETE UNWANTED ITEMS ───────────────────────────
     def delete_activity(self, activity_name):
-        """Deletes an item from the configuration memory and disk storage"""
         if activity_name in COLOR_MAP:
             del COLOR_MAP[activity_name]
             save_current_colors()
             return {"status": "success", "message": f"Deleted {activity_name}"}
         return {"status": "error", "message": "Item not found"}
-    # ─────────────────────────────────────────────────────────────────
 
     def get_color_map(self):
-        """Exposes color map as JSON string if frontend requests it"""
         return json.dumps(COLOR_MAP, ensure_ascii=False)
 
     def request_chart_render(self, target_date, operator_name):
@@ -124,17 +113,15 @@ class Api:
             df['start_dt'] = pd.to_datetime(log_date + " " + df['開始時刻'].astype(str))
             df['end_dt']   = pd.to_datetime(log_date + " " + df['終了時刻'].astype(str))
 
-            # ── DYNAMIC ITEM AUTO-DETECTION & PERSISTENCE ──
             detected_new_item = False
             for act_item in df['内容'].dropna().unique():
                 act_item = str(act_item).strip()
                 if act_item not in COLOR_MAP:
-                    COLOR_MAP[act_item] = "#B0BEC5"  # Automatically assign Grey fallback
+                    COLOR_MAP[act_item] = "#B0BEC5"
                     detected_new_item = True
             
             if detected_new_item:
-                save_current_colors()  # Commit new items automatically to the local JSON storage
-            # ───────────────────────────────────────────────
+                save_current_colors()
 
             equipment_order = list(dict.fromkeys(df['設備'].tolist()))
             tree = {}
@@ -260,14 +247,15 @@ class Api:
                 height=chart_h,
                 hoverlabel=dict(bgcolor="white", font_size=12, font_family="Meiryo, sans-serif")
             )
-            return fig.to_html(include_plotlyjs='cdn', full_html=False)
+            
+            # Using include_plotlyjs=False prevents injecting huge online CDN assets
+            return fig.to_html(include_plotlyjs=False, full_html=False)
 
         except Exception as e:
             import traceback
             return f"<h3 style='color:red;padding:20px;'>エラーが発生しました:<br>{str(e)}<br><pre>{traceback.format_exc()}</pre></h3>"
 
     def get_csv_list(self):
-        """Scan data/ folder, return JSON list of {date, operator}."""
         data_dir = get_external_data_path()
         results  = []
         if not os.path.exists(data_dir):
@@ -310,39 +298,24 @@ class Api:
             return json.dumps({"error": str(e) + "\n" + traceback.format_exc()})
 
 
-UI_DIR = get_asset_path("UI")
-
-try:
-    with open(os.path.join(UI_DIR, "index.html"), "r", encoding="utf-8") as f:
-        html_content = f.read()
-    with open(os.path.join(UI_DIR, "style.css"), "r", encoding="utf-8") as f:
-        css_content = f.read()
-    with open(os.path.join(UI_DIR, "main.js"), "r", encoding="utf-8") as f:
-        js_content = f.read()
-
-    UI_HTML = html_content.replace(
-        "</head>", f"<style>{css_content}</style></head>"
-    ).replace(
-        "</body>", f"<script>{js_content}</script></body>"
-    )
-
-except FileNotFoundError as e:
-    UI_HTML = f"<h3 style='color:red;padding:20px;'>Asset Loading Error: Missing directory or configuration file.<br>{e}</h3>"
-
-
-# ── CRASH FIX: Accept arbitrary arguments (*args) ────────────────
 def on_download_triggered(*args):
     print("Download action or snapshot triggered from Plotly toolbar safely.")
 
 
 if __name__ == "__main__":
     api = Api()
+    
+    # Path to index.html within UI assets directory
+    index_path = get_asset_path(os.path.join("UI", "index.html"))
+    
     window = webview.create_window(
         "作業日報管理システム (Work Report Dashboard)",
-        html=UI_HTML,
+        url=index_path,
         js_api=api,
         width=1200,
         height=850,
         maximized=True,
     )
-    webview.start(on_download_triggered, window)
+    
+    # http_server=True allows the pywebview engine to render local JS, CSS, and Plotly assets cleanly offline
+    webview.start(on_download_triggered, window, http_server=True)

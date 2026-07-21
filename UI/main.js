@@ -60,7 +60,51 @@
     renderDirectoryHTML(uniqueOperators, counts);
   }
 
-  function renderDirectoryHTML(operators, counts) {
+  function groupDates(dateStrings) {
+    if (!dateStrings || dateStrings.length === 0) return '';
+    
+    // De-duplicate dates and sort chronologically
+    const uniqueDates = [...new Set(dateStrings)].sort();
+    const dates = uniqueDates.map(d => {
+      const parts = d.split('-');
+      // Parse safely to local midnight avoiding timezone shift bugs
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }).sort((a, b) => a - b);
+    
+    const groups = [];
+    let currentGroup = [dates[0]];
+
+    for (let i = 1; i < dates.length; i++) {
+      const prev = dates[i - 1];
+      const curr = dates[i];
+      const diffTime = Math.abs(curr - prev);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        currentGroup.push(curr);
+      } else if (diffDays > 0) {
+        groups.push(currentGroup);
+        currentGroup = [curr];
+      }
+    }
+    groups.push(currentGroup);
+
+    // Format groups into range expressions
+    return groups.map(group => {
+      const formatDay = (d) => {
+        return (d.getMonth() + 1) + '/' + d.getDate();
+      };
+      if (group.length === 1) {
+        return formatDay(group[0]);
+      } else if (group.length === 2) {
+        return formatDay(group[0]) + ', ' + formatDay(group[1]);
+      } else {
+        return formatDay(group[0]) + '～' + formatDay(group[group.length - 1]);
+      }
+    }).join(', ');
+  }
+
+function renderDirectoryHTML(operators, counts) {
     const listEl = document.getElementById('opDirectoryList');
     if (operators.length === 0) {
       listEl.innerHTML = '<div style="padding:16px; color:#aaa; text-align:center; font-size:13px;">該当する作業者がいません</div>';
@@ -68,12 +112,26 @@
     }
 
     listEl.innerHTML = operators.map(op => {
-      return '<div class="op-item" onclick="selectOperatorFromDirectory(\'' + op + '\')">' +
-              '<span>👤 ' + op + '</span>' +
-              '<span class="op-badge">' + counts[op] + ' 日分</span>' +
+      // Find all dates related to this specific operator
+      const opDates = allCsvList
+        .filter(item => item.operator === op)
+        .map(item => item.date);
+      
+      const dateSummary = groupDates(opDates);
+
+      return '<div class="op-item" onclick="selectOperatorFromDirectory(\'' + op + '\')" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px;">' +
+              '<div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">' +
+                '<span style="font-weight: bold; font-size: 14px; color: #333;">👤 ' + op + '</span>' +
+                '<span class="op-badge">' + counts[op] + ' 日分</span>' +
+              '</div>' +
+              '<div style="font-size: 11.5px; color: #555; background: #e0f2f1; padding: 5px 10px; border-radius: 6px; width: 100%; box-sizing: border-box; margin-top: 4px; border-left: 4px solid #00ACC1; display: flex; align-items: center; gap: 6px;">' +
+                '<span>📅</span>' +
+                '<span style="font-weight: 500;">データ登録日: ' + dateSummary + '</span>' +
+              '</div>' +
             '</div>';
     }).join('');
   }
+
 
   function filterOperatorDirectory() {
     const query = document.getElementById('opSearchInput').value.toLowerCase().trim();
