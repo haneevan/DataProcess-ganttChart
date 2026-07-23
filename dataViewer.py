@@ -248,7 +248,6 @@ class Api:
                 hoverlabel=dict(bgcolor="white", font_size=12, font_family="Meiryo, sans-serif")
             )
             
-            # Using include_plotlyjs=False prevents injecting huge online CDN assets
             return fig.to_html(include_plotlyjs=False, full_html=False)
 
         except Exception as e:
@@ -267,35 +266,80 @@ class Api:
                     results.append({"date": parts[0], "operator": parts[1]})
         return json.dumps(results, ensure_ascii=False)
 
-    def get_summary_data(self, target_date, operator_name):
-        target_date = target_date.replace("/", "-").strip()
-        
-        data_dir       = get_external_data_path()
-        filename       = f"{target_date}_{operator_name}.csv"
-        data_file_path = os.path.join(data_dir, filename)
-        if not os.path.exists(data_file_path):
-            return json.dumps({"error": f"ファイル '{filename}' が見つかりません"})
-        try:
-            meta_df = pd.read_csv(data_file_path, nrows=2, header=None, encoding="shift_jis", usecols=[0, 1])
-            log_date     = str(meta_df.iloc[0, 1]).split(" ")[0].replace("/", "-").strip()
-            csv_operator = str(meta_df.iloc[1, 1]).strip()
-            df = pd.read_csv(data_file_path, skiprows=3, encoding="shift_jis")
-            df.columns       = df.columns.str.strip()
-            df['start_dt']   = pd.to_datetime(log_date + " " + df['開始時刻'].astype(str))
-            df['end_dt']     = pd.to_datetime(log_date + " " + df['終了時刻'].astype(str))
-            df['duration_s'] = (df['end_dt'] - df['start_dt']).dt.total_seconds().astype(int)
-            by_act = (df.groupby('内容')['duration_s'].sum()
-                        .reset_index()
-                        .rename(columns={'内容': 'name', 'duration_s': 'seconds'})
-                        .sort_values('seconds', ascending=False))
-            return json.dumps({
-                "date": log_date, "operator": csv_operator,
-                "by_activity": by_act.to_dict(orient='records'),
-                "total_seconds": int(df['duration_s'].sum())
-            }, ensure_ascii=False)
-        except Exception as e:
-            import traceback
-            return json.dumps({"error": str(e) + "\n" + traceback.format_exc()})
+    # ── NEW EXTENDED SUMMARY RANGE DATA API ──────────────────────────
+    def get_summary_range_data(self, operator_name, start_date, end_date):
+        """ Scans CSVs matching operator and date range, returning table rows and bar chart data """
+        data_dir = get_external_data_path()
+        if not os.path.exists(data_dir):
+            return json.dumps({"error": "Data folder not found"})
+
+        start_clean = start_date.replace("/", "-").strip() if start_date else ""
+        end_clean   = end_date.replace("/", "-").strip() if end_date else ""
+
+        all_rows = []
+        matching_files = []
+
+        for fname in sorted(os.listdir(data_dir)):
+            if fname.endswith(".csv"):
+                parts = fname[:-4].split("_", 1)
+                if len(parts) == 2:
+                    f_date, f_op = parts[0], parts[1]
+                    if f_op == operator_name:
+                        # Check date filter bounds
+                        if start_clean and f_date < start_clean:
+                            continue
+                        if end_clean and f_date > end_clean:
+                            continue
+                        matching_files.append((f_date, os.path.join(data_dir, fname)))
+
+        if not matching_files:
+            return json.dumps({"error": f"指定された期間 ({start_clean} ～ {end_clean}) のデータが見つかりません。"})
+
+        daily_activities = {}  # { date: { activity: total_minutes } }
+
+        for f_date, file_path in matching_files:
+            try:
+                df = pd.read_csv(file_path, skiprows=3, encoding="shift_jis")
+                df.columns = df.columns.str.strip()
+                df['start_dt'] = pd.to_datetime(f_date + " " + df['開始時刻'].astype(str))
+                df['end_dt']   = pd.to_datetime(f_date + " " + df['終了時刻'].astype(str))
+                df['duration_min'] = (df['end_dt'] - df['start_dt']).dt.total_seconds() / 60.0
+
+                if f_date not in daily_activities:
+                    daily_activities[f_date] = {}
+
+                for _, row in df.iterrows():
+                    act   = str(row['内容']).strip()
+                    equip = str(row['設備']).strip()
+                    dur   = round(float(row['duration_min']), 2)
+
+                    # Append to chronological table list
+                    all_rows.append({
+                        "date": f_date,
+                        "equipment": equip,
+                        "content": act,
+                        "start_time": str(row['開始時刻']),
+                        "end_time": str(row['終了時刻']),
+                        "duration_min": f"{dur:.2f}"
+                    })
+
+                    # Aggregate totals for the bar chart
+                    daily_activities[f_date][act] = round(daily_activities[f_date].get(act, 0.0) + dur, 2)
+
+            except Exception as e:
+                print(f"Error parsing {file_path}: {e}")
+
+        # Unique activities found across all days for chart traces
+        unique_acts = list(dict.fromkeys([r['content'] for r in all_rows]))
+
+        return json.dumps({
+            "operator": operator_name,
+            "rows": all_rows,
+            "dates": list(daily_activities.keys()),
+            "unique_activities": unique_acts,
+            "daily_activities": daily_activities,
+            "colors": COLOR_MAP
+        }, ensure_ascii=False)
 
 
 def on_download_triggered(*args):
@@ -305,7 +349,6 @@ def on_download_triggered(*args):
 if __name__ == "__main__":
     api = Api()
     
-    # Path to index.html within UI assets directory
     index_path = get_asset_path(os.path.join("UI", "index.html"))
     
     window = webview.create_window(
@@ -317,5 +360,4 @@ if __name__ == "__main__":
         maximized=True,
     )
     
-    # http_server=True allows the pywebview engine to render local JS, CSS, and Plotly assets cleanly offline
     webview.start(on_download_triggered, window, http_server=True)

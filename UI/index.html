@@ -56,28 +56,70 @@
   </div>
 </div>
 
+<!-- ── UPDATED SUMMARY SCREEN DASHBOARD LAYOUT ────────────────── -->
 <div class="screen" id="screen-summary">
-  <div class="sum-wrap">
-    <div class="sum-header">
-      <h2 id="sum-title">作業まとめ</h2>
-      <p id="sum-sub"></p>
+  <div class="sum-dash-container">
+    
+    <!-- Top Operator Selector Header -->
+    <div class="sum-dash-header">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <h2 style="margin:0; font-size: 20px; color: #1e88e5; font-weight: bold;">作業まとめ</h2>
+        <select id="summaryOpSelect" class="op-dropdown-pill" onchange="onSummaryOperatorChange()">
+          <option value="">-- 作業者を選択 --</option>
+        </select>
+      </div>
     </div>
-    <div class="sum-grid">
-      <div class="sum-panel">
-        <h3>作業別 時間内訳</h3>
-        <div id="pie-container"></div>
-        <p></p>
-        <div id="bar-container"></div>
+
+    <!-- Main Split Section (Left: Controls & Table, Right: Plotly Chart) -->
+    <div class="sum-dash-content">
+      
+      <!-- LEFT PANEL: Filters & Table -->
+      <div class="sum-left-card">
+        <div class="sum-toolbar">
+          <div class="date-range-group">
+            <input type="date" id="sumStartDate" class="date-pill">
+            <span>～</span>
+            <input type="date" id="sumEndDate" class="date-pill">
+          </div>
+          <button class="btn-action btn-blue" onclick="loadSummaryData()">データ読込</button>
+          <div style="display: flex; gap: 6px; margin-left: auto;">
+            <button class="btn-action btn-outline" onclick="refreshLatestSummaryData()" title="最新に更新">↻最新</button>
+            <button class="btn-action btn-green" onclick="exportSummaryCSV()" title="CSV出力">出力</button>
+          </div>
+        </div>
+
+        <div class="sum-table-wrapper">
+          <table class="sum-detail-table">
+            <thead>
+              <tr>
+                <th style="width: 15%;">日付</th>
+                <th style="width: 18%;">設備</th>
+                <th style="width: 22%;">内容</th>
+                <th style="width: 17%;">開始時刻</th>
+                <th style="width: 17%;">終了時刻</th>
+                <th style="width: 11%;">合計(分)</th>
+              </tr>
+            </thead>
+            <tbody id="sum-detail-tbody">
+              <tr>
+                <td colspan="6" style="text-align: center; color: #999; padding: 30px;">
+                  「データ読込」をクリックしてデータを表示してください。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="sum-panel">
-        <h3>合計時間テーブル</h3>
-        <table class="act-table">
-          <thead>
-            <tr><th>作業内容</th><th>合計時間</th><th>割合</th></tr>
-          </thead>
-          <tbody id="sum-tbody"></tbody>
-        </table>
+
+      <!-- RIGHT PANEL: Bar Chart -->
+      <div class="sum-right-card">
+        <div id="sum-barchart-container" style="width: 100%; height: 100%; min-height: 500px;">
+          <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa; font-size:14px;">
+            チャート読み込み中...
+          </div>
+        </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -97,7 +139,8 @@
           <tr>
             <th style="text-align: left; padding-left: 15px;">業務項目名 (Activity Item)</th>
             <th style="text-align: center; width: 150px;">表示カラー (Color)</th>
-            <th style="text-align: center; width: 100px;">操作 (Actions)</th> </tr>
+            <th style="text-align: center; width: 100px;">操作 (Actions)</th>
+          </tr>
         </thead>
         <tbody id="activities-list-body">
         </tbody>
