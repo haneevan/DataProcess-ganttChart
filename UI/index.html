@@ -19,6 +19,7 @@
   </div>
 </div>
 
+<!-- Home Screen -->
 <div class="screen active" id="screen-home">
   <div class="home-wrap">
     <div class="home-card">
@@ -50,13 +51,14 @@
   </div>
 </div>
 
+<!-- Gantt Chart Screen -->
 <div class="screen" id="screen-gantt">
   <div id="gantt-wrapper">
     <div style="padding:40px;color:#999;font-size:15px;">⏳ 読み込み中...</div>
   </div>
 </div>
 
-<!-- ── UPDATED SUMMARY SCREEN DASHBOARD LAYOUT ────────────────── -->
+<!-- Summary Screen Dashboard Layout -->
 <div class="screen" id="screen-summary">
   <div class="sum-dash-container">
     
@@ -88,15 +90,25 @@
           </div>
         </div>
 
-        <div class="sum-table-wrapper">
+        <div class="sum-table-wrapper" onclick="closeFilterPopoverOnClickOutside(event)">
           <table class="sum-detail-table">
             <thead>
               <tr>
                 <th style="width: 15%;">日付</th>
-                <th style="width: 18%;">設備</th>
-                <th style="width: 22%;">内容</th>
-                <th style="width: 17%;">開始時刻</th>
-                <th style="width: 17%;">終了時刻</th>
+                <th style="width: 20%;">
+                  <div class="th-filter-wrap">
+                    <span>設備</span>
+                    <button class="btn-th-filter" id="btn-filter-equipment" onclick="toggleFilterPopover('equipment', event)" title="フィルター">▼</button>
+                  </div>
+                </th>
+                <th style="width: 22%;">
+                  <div class="th-filter-wrap">
+                    <span>内容</span>
+                    <button class="btn-th-filter" id="btn-filter-content" onclick="toggleFilterPopover('content', event)" title="フィルター">▼</button>
+                  </div>
+                </th>
+                <th style="width: 16%;">開始時刻</th>
+                <th style="width: 16%;">終了時刻</th>
                 <th style="width: 11%;">合計(分)</th>
               </tr>
             </thead>
@@ -124,6 +136,24 @@
   </div>
 </div>
 
+<!-- Floating Excel-like Filter Popover Window -->
+<div id="filter-popover" class="filter-popover" style="display: none;">
+  <div class="popover-search-box">
+    <input type="text" id="filter-search-input" placeholder="検索..." oninput="filterPopoverOptions()">
+  </div>
+  <div class="popover-select-all-row">
+    <label><input type="checkbox" id="filter-select-all-cb" onchange="toggleFilterSelectAll(this.checked)"> (すべて選択)</label>
+  </div>
+  <div class="popover-list" id="filter-options-list">
+    <!-- Checkbox options injected dynamically -->
+  </div>
+  <div class="popover-actions">
+    <button class="btn-popover btn-popover-cancel" onclick="closeFilterPopover()">キャンセル</button>
+    <button class="btn-popover btn-popover-ok" onclick="applyFilterFromPopover()">OK</button>
+  </div>
+</div>
+
+<!-- Settings Screen -->
 <div class="screen" id="screen-settings">
   <div class="sum-wrap" style="max-width: 800px; margin: 0 auto;">
     <div class="sum-header">
@@ -148,5 +178,6 @@
     </div>
   </div>
 </div>
+
 </body>
 </html>

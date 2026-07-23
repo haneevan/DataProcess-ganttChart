@@ -6,6 +6,12 @@
   let COLOR_MAP    = {};
   const DEFAULT_CLR = "#B0BEC5";
 
+  // Raw fetched summary dataset and filter selections
+  let rawSummaryData = null;
+  let activeEquipmentFilters = new Set();
+  let activeContentFilters   = new Set();
+  let currentFilterColumn    = '';
+
   // ── Navigation ──────────────────────────────────────────────────
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -148,7 +154,6 @@
     }
   }
 
-  // Detects the latest available date inside CSV files, defaulting to today if empty
   function getLatestAvailableDate() {
     if (!allCsvList || allCsvList.length === 0) {
       const today = new Date();
@@ -173,7 +178,6 @@
       allCsvList = JSON.parse(raw);
       buildOperatorDirectory();
 
-      // Default date automatically selects the newest date present in data/ folder
       const latestDate = getLatestAvailableDate();
       dateInput.value = latestDate;
       populateOps(latestDate);
@@ -217,19 +221,29 @@
     showScreen('summary');
     populateSummaryOperators();
 
-    const sumSel = document.getElementById('summaryOpSelect');
-    if (!sumSel.value && selOperator) {
-      sumSel.value = selOperator;
+    const sumSel    = document.getElementById('summaryOpSelect');
+    const homeOp    = document.getElementById('opSelect').value;
+    const homeDate  = document.getElementById('dateInput').value;
+
+    if (homeOp) {
+      sumSel.value = homeOp;
     } else if (sumSel.options.length > 0) {
       sumSel.selectedIndex = 0;
     }
 
-    const currentOp = sumSel.value;
-    if (currentOp) {
-      const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
-      if (opDates.length > 0) {
-        document.getElementById('sumStartDate').value = opDates[0];
-        document.getElementById('sumEndDate').value = opDates[opDates.length - 1];
+    // Default the summary date range to match the single selected date from Home screen
+    if (homeDate) {
+      document.getElementById('sumStartDate').value = homeDate;
+      document.getElementById('sumEndDate').value   = homeDate;
+    } else {
+      const currentOp = sumSel.value;
+      if (currentOp) {
+        const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
+        if (opDates.length > 0) {
+          const newest = opDates[opDates.length - 1];
+          document.getElementById('sumStartDate').value = newest;
+          document.getElementById('sumEndDate').value   = newest;
+        }
       }
     }
 
@@ -241,14 +255,14 @@
     if (currentOp) {
       const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
       if (opDates.length > 0) {
-        document.getElementById('sumStartDate').value = opDates[0];
-        document.getElementById('sumEndDate').value = opDates[opDates.length - 1];
+        const newestDate = opDates[opDates.length - 1];
+        document.getElementById('sumStartDate').value = newestDate;
+        document.getElementById('sumEndDate').value   = newestDate;
       }
     }
     loadSummaryData();
   }
 
-  // Handler for the "↻最新" button: re-scans directory and sets view ONLY to the single newest date
   function refreshLatestSummaryData() {
     pywebview.api.get_csv_list().then(function (raw) {
       allCsvList = JSON.parse(raw);
@@ -261,10 +275,9 @@
         sumSel.value = currentOp;
         const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
         if (opDates.length > 0) {
-          // Snap both start and end date to the single NEWEST available date
           const newestDate = opDates[opDates.length - 1];
           document.getElementById('sumStartDate').value = newestDate;
-          document.getElementById('sumEndDate').value = newestDate;
+          document.getElementById('sumEndDate').value   = newestDate;
         }
       }
       loadSummaryData();
@@ -293,38 +306,94 @@
         return;
       }
 
-      if (data.rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:#888;">データがありません。</td></tr>';
-      } else {
-        tbody.innerHTML = data.rows.map(r => {
-          return '<tr>' +
-                   '<td>' + r.date.replace(/-/g, '/') + '</td>' +
-                   '<td>' + r.equipment + '</td>' +
-                   '<td>' + r.content + '</td>' +
-                   '<td>' + r.start_time + '</td>' +
-                   '<td>' + r.end_time + '</td>' +
-                   '<td>' + r.duration_min + '</td>' +
-                 '</tr>';
-        }).join('');
-      }
+      rawSummaryData = data;
 
-      renderSummaryBarChart(data);
+      // Reset filters to include all unique values from newly loaded data
+      activeEquipmentFilters = new Set(data.rows.map(r => r.equipment));
+      activeContentFilters   = new Set(data.rows.map(r => r.content));
+
+      updateFilterHeaderButtonsState();
+      renderFilteredSummaryView();
     });
   }
 
-  function renderSummaryBarChart(data) {
+  function updateFilterHeaderButtonsState() {
+    if (!rawSummaryData) return;
+
+    const allEquipments = new Set(rawSummaryData.rows.map(r => r.equipment));
+    const allContents   = new Set(rawSummaryData.rows.map(r => r.content));
+
+    const btnEquip = document.getElementById('btn-filter-equipment');
+    const btnCont  = document.getElementById('btn-filter-content');
+
+    if (btnEquip) {
+      if (activeEquipmentFilters.size < allEquipments.size) {
+        btnEquip.classList.add('active-filter');
+      } else {
+        btnEquip.classList.remove('active-filter');
+      }
+    }
+
+    if (btnCont) {
+      if (activeContentFilters.size < allContents.size) {
+        btnCont.classList.add('active-filter');
+      } else {
+        btnCont.classList.remove('active-filter');
+      }
+    }
+  }
+
+  function renderFilteredSummaryView() {
+    if (!rawSummaryData) return;
+
+    const tbody = document.getElementById('sum-detail-tbody');
+    const filteredRows = rawSummaryData.rows.filter(r => 
+      activeEquipmentFilters.has(r.equipment) && activeContentFilters.has(r.content)
+    );
+
+    if (filteredRows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:#888;">該当するデータがありません。</td></tr>';
+    } else {
+      tbody.innerHTML = filteredRows.map(r => {
+        return '<tr>' +
+                 '<td>' + r.date.replace(/-/g, '/') + '</td>' +
+                 '<td>' + r.equipment + '</td>' +
+                 '<td>' + r.content + '</td>' +
+                 '<td>' + r.start_time + '</td>' +
+                 '<td>' + r.end_time + '</td>' +
+                 '<td>' + r.duration_min + '</td>' +
+               '</tr>';
+      }).join('');
+    }
+
+    renderSummaryBarChart(filteredRows);
+  }
+
+  function renderSummaryBarChart(filteredRows) {
     if (typeof Plotly === 'undefined') {
-      setTimeout(() => renderSummaryBarChart(data), 200);
+      setTimeout(() => renderSummaryBarChart(filteredRows), 200);
       return;
     }
 
-    const dates = data.dates;
-    const activities = data.unique_activities;
-    const dailyMap = data.daily_activities;
-    const colors = data.colors || {};
+    if (!rawSummaryData || filteredRows.length === 0) {
+      document.getElementById('sum-barchart-container').innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa;">表示するデータがありません</div>';
+      return;
+    }
+
+    const dates = [...new Set(filteredRows.map(r => r.date))].sort();
+    const activities = [...new Set(filteredRows.map(r => r.content))];
+    const colors = rawSummaryData.colors || {};
+
+    // Aggregate daily totals based on filtered rows
+    const dailyMap = {};
+    filteredRows.forEach(r => {
+      if (!dailyMap[r.date]) dailyMap[r.date] = {};
+      const dur = parseFloat(r.duration_min) || 0;
+      dailyMap[r.date][r.content] = (dailyMap[r.date][r.content] || 0) + dur;
+    });
 
     const traces = activities.map(act => {
-      const yValues = dates.map(d => (dailyMap[d] && dailyMap[d][act]) ? dailyMap[d][act] : 0);
+      const yValues = dates.map(d => dailyMap[d] && dailyMap[d][act] ? dailyMap[d][act] : 0);
       return {
         x: dates.map(d => d.replace(/-/g, '/')),
         y: yValues,
@@ -346,6 +415,98 @@
     };
 
     Plotly.newPlot('sum-barchart-container', traces, layout, { responsive: true, displayModeBar: false });
+  }
+
+  // ── EXCEL-LIKE FILTER POPOVER LOGIC ──────────────────────────────
+  function toggleFilterPopover(columnKey, event) {
+    event.stopPropagation();
+    const popover = document.getElementById('filter-popover');
+    
+    if (popover.style.display === 'flex' && currentFilterColumn === columnKey) {
+      closeFilterPopover();
+      return;
+    }
+
+    currentFilterColumn = columnKey;
+    
+    // Position popover right below clicked trigger button
+    const btnRect = event.currentTarget.getBoundingClientRect();
+    popover.style.top = (btnRect.bottom + 4) + 'px';
+    popover.style.left = Math.min(btnRect.left, window.innerWidth - 270) + 'px';
+    popover.style.display = 'flex';
+
+    document.getElementById('filter-search-input').value = '';
+    buildFilterPopoverOptions();
+  }
+
+  function buildFilterPopoverOptions() {
+    if (!rawSummaryData) return;
+
+    const listEl = document.getElementById('filter-options-list');
+    const allItems = [...new Set(rawSummaryData.rows.map(r => r[currentFilterColumn]))].sort();
+    const activeSet = currentFilterColumn === 'equipment' ? activeEquipmentFilters : activeContentFilters;
+
+    listEl.innerHTML = allItems.map(item => {
+      const isChecked = activeSet.has(item) ? 'checked' : '';
+      return `<label><input type="checkbox" class="filter-opt-cb" value="${item}" ${isChecked}> <span>${item}</span></label>`;
+    }).join('');
+
+    updateSelectAllCheckboxState();
+  }
+
+  function filterPopoverOptions() {
+    const query = document.getElementById('filter-search-input').value.toLowerCase().trim();
+    const labels = document.querySelectorAll('#filter-options-list label');
+
+    labels.forEach(label => {
+      const txt = label.textContent.toLowerCase();
+      label.style.display = txt.includes(query) ? 'flex' : 'none';
+    });
+  }
+
+  function toggleFilterSelectAll(checked) {
+    const visibleCbs = document.querySelectorAll('#filter-options-list label:not([style*="display: none"]) .filter-opt-cb');
+    visibleCbs.forEach(cb => cb.checked = checked);
+  }
+
+  function updateSelectAllCheckboxState() {
+    const cbs = Array.from(document.querySelectorAll('.filter-opt-cb'));
+    const selectAllCb = document.getElementById('filter-select-all-cb');
+    if (cbs.length === 0) return;
+
+    const allChecked = cbs.every(cb => cb.checked);
+    selectAllCb.checked = allChecked;
+  }
+
+  function applyFilterFromPopover() {
+    const cbs = document.querySelectorAll('.filter-opt-cb');
+    const selected = new Set();
+
+    cbs.forEach(cb => {
+      if (cb.checked) selected.add(cb.value);
+    });
+
+    if (currentFilterColumn === 'equipment') {
+      activeEquipmentFilters = selected;
+    } else if (currentFilterColumn === 'content') {
+      activeContentFilters = selected;
+    }
+
+    closeFilterPopover();
+    updateFilterHeaderButtonsState();
+    renderFilteredSummaryView();
+  }
+
+  function closeFilterPopover() {
+    const popover = document.getElementById('filter-popover');
+    if (popover) popover.style.display = 'none';
+  }
+
+  function closeFilterPopoverOnClickOutside(event) {
+    const popover = document.getElementById('filter-popover');
+    if (popover && popover.style.display === 'flex' && !popover.contains(event.target)) {
+      closeFilterPopover();
+    }
   }
 
   function exportSummaryCSV() {
@@ -401,7 +562,7 @@
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 <line x1="10" y1="11" x2="10" y2="17"></line>
-                <line x1="14" y1="11" x2="14" y2="17"></line>
+                <line x1="14" y1="14" x2="14" y2="17"></line>
               </svg>
             </button>
           </td>
