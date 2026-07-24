@@ -352,7 +352,7 @@ if __name__ == "__main__":
     index_path = get_asset_path(os.path.join("UI", "index.html"))
     
     window = webview.create_window(
-        "作業日報管理システム (Work Report Dashboard)",
+        "作業日報管理システム",
         url=index_path,
         js_api=api,
         width=1200,

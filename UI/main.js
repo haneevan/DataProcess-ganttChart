@@ -37,7 +37,8 @@
   }
 
   function goBack() {
-    if (screen === 'gantt' || screen === 'settings' || screen === 'summary') showScreen('home');
+    if (screen === 'gantt' || screen === 'settings') showScreen('home');
+    else if (screen === 'summary') showScreen('gantt');
   }
 
   // ── Home: Populate Dropdowns & Render Directories ─────────────
