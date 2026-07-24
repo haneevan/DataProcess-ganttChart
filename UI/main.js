@@ -11,6 +11,7 @@
   let activeEquipmentFilters = new Set();
   let activeContentFilters   = new Set();
   let currentFilterColumn    = '';
+  let durationSortMode       = 'none'; // 'none' (default), 'desc' (max->min), 'asc' (min->max)
 
   // ── Navigation ──────────────────────────────────────────────────
   function showScreen(id) {
@@ -29,7 +30,7 @@
       crumb.textContent = 'ホーム > ガント（' + selDate + ' / ' + selOperator + '）';
     } else if (id === 'summary') {
       back.disabled = false; fwd.disabled = true;
-      crumb.textContent = 'ホーム > まとめ';
+      crumb.textContent = 'ホーム > ガント > まとめ';
     } else if (id === 'settings') {
       back.disabled = false; fwd.disabled = true;
       crumb.textContent = 'ホーム > 設定';
@@ -232,7 +233,6 @@
       sumSel.selectedIndex = 0;
     }
 
-    // Default the summary date range to match the single selected date from Home screen
     if (homeDate) {
       document.getElementById('sumStartDate').value = homeDate;
       document.getElementById('sumEndDate').value   = homeDate;
@@ -295,6 +295,9 @@
       return;
     }
 
+    durationSortMode = 'none'; // Reset sort when loading new data
+    updateSortButtonState();
+
     const tbody = document.getElementById('sum-detail-tbody');
     tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:#888;">⏳ データ読み込み中...</td></tr>';
 
@@ -309,7 +312,6 @@
 
       rawSummaryData = data;
 
-      // Reset filters to include all unique values from newly loaded data
       activeEquipmentFilters = new Set(data.rows.map(r => r.equipment));
       activeContentFilters   = new Set(data.rows.map(r => r.content));
 
@@ -344,13 +346,49 @@
     }
   }
 
+  function cycleDurationSort() {
+    if (durationSortMode === 'none') {
+      durationSortMode = 'desc'; // Max to min
+    } else if (durationSortMode === 'desc') {
+      durationSortMode = 'asc';  // Min to max
+    } else {
+      durationSortMode = 'none'; // Reset to default chronological
+    }
+    updateSortButtonState();
+    renderFilteredSummaryView();
+  }
+
+  function updateSortButtonState() {
+    const btnSort = document.getElementById('btn-sort-duration');
+    if (!btnSort) return;
+    if (durationSortMode === 'desc') {
+      btnSort.textContent = '▼';
+      btnSort.classList.add('active-filter');
+    } else if (durationSortMode === 'asc') {
+      btnSort.textContent = '▲';
+      btnSort.classList.add('active-filter');
+    } else {
+      btnSort.textContent = '⇅';
+      btnSort.classList.remove('active-filter');
+    }
+  }
+
   function renderFilteredSummaryView() {
     if (!rawSummaryData) return;
 
     const tbody = document.getElementById('sum-detail-tbody');
-    const filteredRows = rawSummaryData.rows.filter(r => 
+    let filteredRows = rawSummaryData.rows.filter(r => 
       activeEquipmentFilters.has(r.equipment) && activeContentFilters.has(r.content)
     );
+
+    // Apply sorting if active
+    if (durationSortMode !== 'none') {
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const valA = parseFloat(a.duration_min) || 0;
+        const valB = parseFloat(b.duration_min) || 0;
+        return durationSortMode === 'desc' ? valB - valA : valA - valB;
+      });
+    }
 
     if (filteredRows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:#888;">該当するデータがありません。</td></tr>';
@@ -377,7 +415,7 @@
     }
 
     if (!rawSummaryData || filteredRows.length === 0) {
-      document.getElementById('sum-barchart-container').innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa;">表示するデータがありません</div>';
+      document.getElementById('sum-barchart-container').innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa; font-size:14px;">表示するデータがありません</div>';
       return;
     }
 
@@ -385,7 +423,6 @@
     const activities = [...new Set(filteredRows.map(r => r.content))];
     const colors = rawSummaryData.colors || {};
 
-    // Aggregate daily totals based on filtered rows
     const dailyMap = {};
     filteredRows.forEach(r => {
       if (!dailyMap[r.date]) dailyMap[r.date] = {};
@@ -430,7 +467,6 @@
 
     currentFilterColumn = columnKey;
     
-    // Position popover right below clicked trigger button
     const btnRect = event.currentTarget.getBoundingClientRect();
     popover.style.top = (btnRect.bottom + 4) + 'px';
     popover.style.left = Math.min(btnRect.left, window.innerWidth - 270) + 'px';

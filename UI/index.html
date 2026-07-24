@@ -109,7 +109,12 @@
                 </th>
                 <th style="width: 16%;">開始時刻</th>
                 <th style="width: 16%;">終了時刻</th>
-                <th style="width: 11%;">合計(分)</th>
+                <th style="width: 11%;">
+                  <div class="th-filter-wrap">
+                    <span>合計(分)</span>
+                    <button class="btn-th-filter" id="btn-sort-duration" onclick="cycleDurationSort()" title="並べ替え (最大/最小/リセット)">⇅</button>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody id="sum-detail-tbody">
