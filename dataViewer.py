@@ -268,7 +268,6 @@ class Api:
 
     # ── NEW EXTENDED SUMMARY RANGE DATA API ──────────────────────────
     def get_summary_range_data(self, operator_name, start_date, end_date):
-        """ Scans CSVs matching operator and date range, returning table rows and bar chart data """
         data_dir = get_external_data_path()
         if not os.path.exists(data_dir):
             return json.dumps({"error": "Data folder not found"})
@@ -285,7 +284,6 @@ class Api:
                 if len(parts) == 2:
                     f_date, f_op = parts[0], parts[1]
                     if f_op == operator_name:
-                        # Check date filter bounds
                         if start_clean and f_date < start_clean:
                             continue
                         if end_clean and f_date > end_clean:
@@ -295,7 +293,8 @@ class Api:
         if not matching_files:
             return json.dumps({"error": f"指定された期間 ({start_clean} ～ {end_clean}) のデータが見つかりません。"})
 
-        daily_activities = {}  # { date: { activity: total_minutes } }
+        # Group by "date|equipment" composite key instead of date alone
+        daily_equip_activities = {}
 
         for f_date, file_path in matching_files:
             try:
@@ -305,15 +304,11 @@ class Api:
                 df['end_dt']   = pd.to_datetime(f_date + " " + df['終了時刻'].astype(str))
                 df['duration_min'] = (df['end_dt'] - df['start_dt']).dt.total_seconds() / 60.0
 
-                if f_date not in daily_activities:
-                    daily_activities[f_date] = {}
-
                 for _, row in df.iterrows():
                     act   = str(row['内容']).strip()
                     equip = str(row['設備']).strip()
                     dur   = round(float(row['duration_min']), 2)
 
-                    # Append to chronological table list
                     all_rows.append({
                         "date": f_date,
                         "equipment": equip,
@@ -323,21 +318,26 @@ class Api:
                         "duration_min": f"{dur:.2f}"
                     })
 
-                    # Aggregate totals for the bar chart
-                    daily_activities[f_date][act] = round(daily_activities[f_date].get(act, 0.0) + dur, 2)
+                    # Key by combination: e.g. "2026/07/15 (PRP-42)"
+                    combo_key = f"{f_date} ({equip})"
+                    if combo_key not in daily_equip_activities:
+                        daily_equip_activities[combo_key] = {}
+
+                    daily_equip_activities[combo_key][act] = round(
+                        daily_equip_activities[combo_key].get(act, 0.0) + dur, 2
+                    )
 
             except Exception as e:
                 print(f"Error parsing {file_path}: {e}")
 
-        # Unique activities found across all days for chart traces
         unique_acts = list(dict.fromkeys([r['content'] for r in all_rows]))
 
         return json.dumps({
             "operator": operator_name,
             "rows": all_rows,
-            "dates": list(daily_activities.keys()),
+            "combo_keys": list(daily_equip_activities.keys()),
             "unique_activities": unique_acts,
-            "daily_activities": daily_activities,
+            "daily_equip_activities": daily_equip_activities,
             "colors": COLOR_MAP
         }, ensure_ascii=False)
 

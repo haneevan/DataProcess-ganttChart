@@ -415,25 +415,29 @@
     }
 
     if (!rawSummaryData || filteredRows.length === 0) {
-      document.getElementById('sum-barchart-container').innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa; font-size:14px;">表示するデータがありません</div>';
+      document.getElementById('sum-barchart-container').innerHTML = 
+        '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:#aaa; font-size:14px;">表示するデータがありません</div>';
       return;
     }
 
-    const dates = [...new Set(filteredRows.map(r => r.date))].sort();
+    // Build x-axis labels as "YYYY/MM/DD (Equipment)"
+    const comboKeys = [...new Set(filteredRows.map(r => `${r.date.replace(/-/g, '/')} (${r.equipment})`))].sort();
     const activities = [...new Set(filteredRows.map(r => r.content))];
     const colors = rawSummaryData.colors || {};
 
-    const dailyMap = {};
+    // Map duration per comboKey per activity
+    const map = {};
     filteredRows.forEach(r => {
-      if (!dailyMap[r.date]) dailyMap[r.date] = {};
+      const key = `${r.date.replace(/-/g, '/')} (${r.equipment})`;
+      if (!map[key]) map[key] = {};
       const dur = parseFloat(r.duration_min) || 0;
-      dailyMap[r.date][r.content] = (dailyMap[r.date][r.content] || 0) + dur;
+      map[key][r.content] = (map[key][r.content] || 0) + dur;
     });
 
     const traces = activities.map(act => {
-      const yValues = dates.map(d => dailyMap[d] && dailyMap[d][act] ? dailyMap[d][act] : 0);
+      const yValues = comboKeys.map(k => map[k] && map[k][act] ? map[k][act] : 0);
       return {
-        x: dates.map(d => d.replace(/-/g, '/')),
+        x: comboKeys,
         y: yValues,
         name: act,
         type: 'bar',
@@ -443,12 +447,17 @@
 
     const layout = {
       barmode: 'group',
-      margin: { t: 30, b: 50, l: 50, r: 20 },
+      margin: { t: 30, b: 80, l: 50, r: 20 },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: { title: '日付', type: 'category', tickfont: { size: 11 } },
+      xaxis: { 
+        title: '日付 (設備)', 
+        type: 'category', 
+        tickfont: { size: 10 },
+        tickangle: -20
+      },
       yaxis: { title: '合計時間 (分)', showgrid: true, gridcolor: '#e0e0e0' },
-      legend: { orientation: 'h', x: 0, y: 1.12, font: { size: 11 } },
+      legend: { orientation: 'h', x: 0, y: 1.15, font: { size: 11 } },
       autosize: true
     };
 
