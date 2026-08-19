@@ -20,6 +20,7 @@
     screen = id;
     const back  = document.getElementById('btn-back');
     const fwd   = document.getElementById('btn-fwd');
+    const edit  = document.getElementById('btn-edit-data');
     const crumb = document.getElementById('breadcrumb');
     
     if (id === 'home') {
@@ -27,14 +28,18 @@
       crumb.textContent = 'ホーム';
     } else if (id === 'gantt') {
       back.disabled = false; fwd.disabled = false;
+      edit.style.display = 'inline-block';
       crumb.textContent = 'ホーム > ガント（' + selDate + ' / ' + selOperator + '）';
     } else if (id === 'summary') {
       back.disabled = false; fwd.disabled = true;
+      edit.style.display = 'none';
       crumb.textContent = 'ホーム > ガント > まとめ';
     } else if (id === 'settings') {
       back.disabled = false; fwd.disabled = true;
+      edit.style.display = 'none';
       crumb.textContent = 'ホーム > 設定';
     }
+    if (id === 'home') edit.style.display = 'none';
   }
 
   function goBack() {
@@ -420,24 +425,37 @@
     }
 
     const dates = [...new Set(filteredRows.map(r => r.date))].sort();
-    const activities = [...new Set(filteredRows.map(r => r.content))];
+    const series = [...new Map(
+      filteredRows.map(r => [r.equipment + '\u0000' + r.content, {
+        equipment: r.equipment,
+        content: r.content
+      }])
+    ).values()];
     const colors = rawSummaryData.colors || {};
 
     const dailyMap = {};
     filteredRows.forEach(r => {
       if (!dailyMap[r.date]) dailyMap[r.date] = {};
+      if (!dailyMap[r.date][r.equipment]) dailyMap[r.date][r.equipment] = {};
       const dur = parseFloat(r.duration_min) || 0;
-      dailyMap[r.date][r.content] = (dailyMap[r.date][r.content] || 0) + dur;
+      dailyMap[r.date][r.equipment][r.content] =
+        (dailyMap[r.date][r.equipment][r.content] || 0) + dur;
     });
 
-    const traces = activities.map(act => {
-      const yValues = dates.map(d => dailyMap[d] && dailyMap[d][act] ? dailyMap[d][act] : 0);
+    const traces = series.map(({ equipment, content }) => {
+      const yValues = dates.map(d => (
+        dailyMap[d] && dailyMap[d][equipment] && dailyMap[d][equipment][content]
+          ? dailyMap[d][equipment][content]
+          : 0
+      ));
       return {
         x: dates.map(d => d.replace(/-/g, '/')),
         y: yValues,
-        name: act,
+        name: equipment + ' / ' + content,
         type: 'bar',
-        marker: { color: colors[act] || DEFAULT_CLR }
+        legendgroup: equipment,
+        marker: { color: colors[content] || DEFAULT_CLR },
+        hovertemplate: equipment + ' / ' + content + '<br>%{x}: %{y:.2f} 分<extra></extra>'
       };
     });
 
@@ -632,4 +650,87 @@
         console.error("Deletion communication error: ", err);
       });
     }
+  }
+
+  function openDataEditor() {
+    const modal = document.getElementById('data-editor-modal');
+    const rowsEl = document.getElementById('editor-rows');
+    const statusEl = document.getElementById('editor-status');
+    rowsEl.innerHTML = '<tr><td colspan="5" class="editor-loading">読み込み中...</td></tr>';
+    statusEl.textContent = '';
+    document.getElementById('editor-file-label').textContent = selDate + ' / ' + selOperator;
+    modal.style.display = 'flex';
+
+    pywebview.api.get_editable_activity_data(selDate, selOperator).then(function (raw) {
+      const data = JSON.parse(raw);
+      if (data.error) {
+        rowsEl.innerHTML = '<tr><td colspan="5" class="editor-error">' + data.error + '</td></tr>';
+        return;
+      }
+      rowsEl.innerHTML = '';
+      data.rows.forEach(row => appendEditorRow(row));
+      if (data.rows.length === 0) addEditorRow();
+    });
+  }
+
+  function appendEditorRow(row = {}) {
+    const tr = document.createElement('tr');
+    ['equipment', 'content'].forEach(key => {
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.className = 'editor-input';
+      input.dataset.field = key;
+      input.value = row[key] || '';
+      td.appendChild(input);
+      tr.appendChild(td);
+    });
+    ['start', 'end'].forEach(key => {
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.className = 'editor-input';
+      input.type = 'time';
+      input.step = '1';
+      input.dataset.field = key;
+      input.value = row[key] || '';
+      td.appendChild(input);
+      tr.appendChild(td);
+    });
+    const actionTd = document.createElement('td');
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'editor-delete';
+    deleteButton.textContent = '削除';
+    deleteButton.onclick = () => tr.remove();
+    actionTd.appendChild(deleteButton);
+    tr.appendChild(actionTd);
+    document.getElementById('editor-rows').appendChild(tr);
+  }
+
+  function addEditorRow() {
+    appendEditorRow();
+  }
+
+  function saveDataEditor() {
+    if (!confirm('この内容でCSVファイルを上書き保存しますか？')) return;
+    const rows = Array.from(document.querySelectorAll('#editor-rows tr')).map(tr => {
+      const row = {};
+      tr.querySelectorAll('input').forEach(input => row[input.dataset.field] = input.value);
+      return row;
+    });
+    const statusEl = document.getElementById('editor-status');
+    statusEl.textContent = '保存中...';
+    pywebview.api.save_activity_data(selDate, selOperator, rows).then(function (response) {
+      if (response.status !== 'success') {
+        statusEl.textContent = response.message;
+        statusEl.className = 'editor-status-error';
+        return;
+      }
+      statusEl.className = 'editor-status-ok';
+      statusEl.textContent = response.message;
+      showGantt();
+      setTimeout(closeDataEditor, 250);
+    });
+  }
+
+  function closeDataEditor() {
+    document.getElementById('data-editor-modal').style.display = 'none';
   }

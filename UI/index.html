@@ -14,6 +14,7 @@
   <h1>作業日報管理システム</h1>
   <span class="breadcrumb" id="breadcrumb">ホーム</span>
   <div style="display: flex; gap: 8px; align-items: center;">
+    <button class="nav-btn" id="btn-edit-data" onclick="openDataEditor()" style="display: none;">✎ データ編集</button>
     <button class="nav-btn" id="btn-settings" onclick="showSettings()">⚙️ 設定</button>
     <button class="nav-btn" id="btn-fwd" onclick="goSummary()" disabled>まとめ →</button>
   </div>
@@ -55,6 +56,30 @@
 <div class="screen" id="screen-gantt">
   <div id="gantt-wrapper">
     <div style="padding:40px;color:#999;font-size:15px;">⏳ 読み込み中...</div>
+  </div>
+</div>
+
+<!-- Manager CSV Editor -->
+<div class="editor-modal" id="data-editor-modal" style="display: none;">
+  <div class="editor-dialog">
+    <div class="editor-header">
+      <div>
+        <h2>データ編集</h2>
+        <p id="editor-file-label"></p>
+      </div>
+      <button class="editor-close" onclick="closeDataEditor()" title="閉じる">×</button>
+    </div>
+    <div class="editor-table-wrapper">
+      <table class="editor-table">
+        <thead><tr><th>設備</th><th>内容</th><th>開始</th><th>終了</th><th>操作</th></tr></thead>
+        <tbody id="editor-rows"></tbody>
+      </table>
+    </div>
+    <div class="editor-footer">
+      <button class="btn-action btn-outline" onclick="addEditorRow()">＋ 行を追加</button>
+      <span id="editor-status"></span>
+      <button class="btn-action btn-blue" onclick="saveDataEditor()">保存</button>
+    </div>
   </div>
 </div>
 

@@ -89,6 +89,99 @@ letter-spacing: 0.3px;
 /* GANTT */
 #gantt-wrapper { flex: 1; width: 100%; overflow: auto; }
 
+/* MANAGER CSV EDITOR */
+.editor-modal {
+position: fixed;
+inset: 0;
+z-index: 10000;
+display: flex;
+align-items: center;
+justify-content: center;
+background: rgba(15, 30, 45, 0.48);
+}
+.editor-dialog {
+width: min(900px, calc(100vw - 40px));
+max-height: calc(100vh - 80px);
+display: flex;
+flex-direction: column;
+background: white;
+border-radius: 10px;
+box-shadow: 0 12px 36px rgba(0,0,0,0.25);
+overflow: hidden;
+}
+.editor-header, .editor-footer {
+display: flex;
+align-items: center;
+gap: 12px;
+padding: 14px 18px;
+background: #f4f7fb;
+border-bottom: 1px solid #d9e2ec;
+}
+.editor-header h2 { margin: 0; color: #1e4f82; font-size: 18px; }
+.editor-header p { margin: 3px 0 0; color: #718096; font-size: 12px; }
+.editor-close { margin-left: auto; border: 0; background: transparent; font-size: 24px; color: #718096; cursor: pointer; }
+.editor-table-wrapper { overflow: auto; padding: 12px 18px; }
+.editor-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.editor-table th, .editor-table td { padding: 7px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.editor-table th { color: #52677d; background: #fbfcfe; position: sticky; top: 0; }
+.editor-input { width: 100%; min-width: 100px; padding: 7px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; }
+.editor-delete { border: 1px solid #ef9a9a; background: #fff5f5; color: #c62828; border-radius: 4px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.editor-footer { border-top: 1px solid #d9e2ec; border-bottom: 0; }
+.editor-footer #editor-status { margin-left: auto; font-size: 12px; }
+.editor-status-ok { color: #2e7d32; }
+.editor-status-error, .editor-error { color: #c62828; }
+.editor-loading { padding: 24px; text-align: center; color: #718096; }
+
+/* MISSED TRACK LOG */
+.missed-track-section {
+margin: 18px 24px 28px;
+background: white;
+border: 1px solid #d9e2ec;
+border-radius: 8px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+overflow: hidden;
+}
+.missed-track-header {
+display: flex;
+align-items: center;
+gap: 10px;
+padding: 12px 16px;
+background: #f4f7fb;
+border-bottom: 1px solid #d9e2ec;
+}
+.missed-track-header h2 {
+margin: 0;
+font-size: 15px;
+color: #263b53;
+}
+.missed-track-header span {
+font-size: 12px;
+color: #607d9a;
+}
+.missed-track-table-wrapper { overflow-x: auto; }
+.missed-track-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 13px;
+}
+.missed-track-table th,
+.missed-track-table td {
+padding: 9px 12px;
+border-right: 1px solid #e7edf3;
+border-bottom: 1px solid #e7edf3;
+text-align: left;
+white-space: nowrap;
+}
+.missed-track-table th {
+background: #fbfcfe;
+color: #52677d;
+font-weight: 700;
+}
+.missed-track-table td { color: #333; }
+.missed-track-table tr:last-child td { border-bottom: none; }
+.missed-track-table th:last-child,
+.missed-track-table td:last-child { border-right: none; width: 100%; }
+
 /* ── SUMMARY DASHBOARD SPLIT STYLES ────────────────────────── */
 .sum-dash-container {
 display: flex;

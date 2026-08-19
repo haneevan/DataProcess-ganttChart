@@ -1,5 +1,8 @@
 import os
 import json
+import csv
+from html import escape
+from datetime import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import webview
@@ -92,6 +95,86 @@ class Api:
 
     def get_color_map(self):
         return json.dumps(COLOR_MAP, ensure_ascii=False)
+
+    def get_editable_activity_data(self, target_date, operator_name):
+        target_date = target_date.replace("/", "-").strip()
+        data_file_path = os.path.join(get_external_data_path(), f"{target_date}_{operator_name}.csv")
+        if not os.path.exists(data_file_path):
+            return json.dumps({"error": "対象のCSVファイルが見つかりません。"}, ensure_ascii=False)
+
+        try:
+            with open(data_file_path, "r", encoding="shift_jis", newline="") as file:
+                csv_rows = list(csv.reader(file))
+
+            activity_rows = []
+            for row in csv_rows[4:]:
+                if len(row) < 4 or not any(cell.strip() for cell in row[:4]):
+                    continue
+                start = row[2].strip() if len(row) > 2 else ""
+                end = row[3].strip() if len(row) > 3 else ""
+                for_time = lambda value: datetime.strptime(value, "%H:%M:%S").strftime("%H:%M:%S") if value else ""
+                activity_rows.append({
+                    "equipment": row[0].strip() if len(row) > 0 else "",
+                    "content": row[1].strip() if len(row) > 1 else "",
+                    "start": for_time(start),
+                    "end": for_time(end),
+                })
+
+            return json.dumps({"rows": activity_rows}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": f"CSV読み込みエラー: {e}"}, ensure_ascii=False)
+
+    def save_activity_data(self, target_date, operator_name, activity_rows):
+        target_date = target_date.replace("/", "-").strip()
+        data_file_path = os.path.join(get_external_data_path(), f"{target_date}_{operator_name}.csv")
+        if not os.path.exists(data_file_path):
+            return {"status": "error", "message": "対象のCSVファイルが見つかりません。"}
+
+        try:
+            with open(data_file_path, "r", encoding="shift_jis", newline="") as file:
+                csv_rows = list(csv.reader(file))
+
+            if len(csv_rows) < 4:
+                return {"status": "error", "message": "CSVのヘッダー形式が正しくありません。"}
+
+            output_rows = csv_rows[:4]
+            column_count = max(5, max((len(row) for row in csv_rows), default=5))
+            for index, item in enumerate(activity_rows, start=1):
+                equipment = str(item.get("equipment", "")).strip()
+                content = str(item.get("content", "")).strip()
+                start = str(item.get("start", "")).strip()
+                end = str(item.get("end", "")).strip()
+                if not equipment or not content or not start or not end:
+                    return {"status": "error", "message": f"{index}行目: 設備、内容、開始、終了は必須です。"}
+
+                try:
+                    start_dt = datetime.strptime(start, "%H:%M:%S")
+                    end_dt = datetime.strptime(end, "%H:%M:%S")
+                except ValueError:
+                    return {"status": "error", "message": f"{index}行目: 時刻は HH:MM:SS 形式で入力してください。"}
+
+                duration = int((end_dt - start_dt).total_seconds())
+                if duration < 0:
+                    return {"status": "error", "message": f"{index}行目: 終了時刻は開始時刻以降にしてください。"}
+
+                row = [equipment, content, start, end, str(duration)]
+                original_row = csv_rows[index + 3] if index + 3 < len(csv_rows) else []
+                row.extend(original_row[5:])
+                row.extend([""] * (column_count - len(row)))
+                output_rows.append(row)
+
+            temp_path = data_file_path + ".tmp"
+            with open(temp_path, "w", encoding="shift_jis", newline="") as file:
+                csv.writer(file, lineterminator="\n").writerows(output_rows)
+            os.replace(temp_path, data_file_path)
+            return {"status": "success", "message": "CSVを保存しました。"}
+        except UnicodeEncodeError:
+            return {"status": "error", "message": "Shift-JISで保存できない文字が含まれています。"}
+        except Exception as e:
+            temp_path = data_file_path + ".tmp"
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return {"status": "error", "message": f"CSV保存エラー: {e}"}
 
     def request_chart_render(self, target_date, operator_name):
         target_date = target_date.replace("/", "-").strip()
@@ -247,8 +330,51 @@ class Api:
                 height=chart_h,
                 hoverlabel=dict(bgcolor="white", font_size=12, font_family="Meiryo, sans-serif")
             )
-            
-            return fig.to_html(include_plotlyjs=False, full_html=False)
+
+            missed_track_rows = []
+            if len(df.columns) >= 10:
+                for _, missed_row in df.iloc[:, 6:10].iterrows():
+                    content = missed_row.iloc[0]
+                    if pd.isna(content) or not str(content).strip():
+                        continue
+                    missed_track_rows.append({
+                        "content": str(content).strip(),
+                        "start": "" if pd.isna(missed_row.iloc[1]) else str(missed_row.iloc[1]).strip(),
+                        "end": "" if pd.isna(missed_row.iloc[2]) else str(missed_row.iloc[2]).strip(),
+                        "comment": "" if pd.isna(missed_row.iloc[3]) else str(missed_row.iloc[3]).strip(),
+                    })
+
+            missed_track_html = ""
+            if missed_track_rows:
+                missed_track_html = """
+                <section class="missed-track-section">
+                  <div class="missed-track-header">
+                    <h2>記録漏れログ</h2>
+                    <span>{count}件</span>
+                  </div>
+                  <div class="missed-track-table-wrapper">
+                    <table class="missed-track-table">
+                      <thead>
+                        <tr><th>内容</th><th>開始</th><th>終了</th><th>コメント</th></tr>
+                      </thead>
+                      <tbody>{rows}</tbody>
+                    </table>
+                  </div>
+                </section>
+                """.format(
+                    count=len(missed_track_rows),
+                    rows="".join(
+                        "<tr><td>{content}</td><td>{start}</td><td>{end}</td><td>{comment}</td></tr>".format(
+                            content=escape(row["content"]),
+                            start=escape(row["start"]),
+                            end=escape(row["end"]),
+                            comment=escape(row["comment"]),
+                        )
+                        for row in missed_track_rows
+                    ),
+                )
+
+            return fig.to_html(include_plotlyjs=False, full_html=False) + missed_track_html
 
         except Exception as e:
             import traceback
