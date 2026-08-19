@@ -349,7 +349,7 @@ class Api:
                 missed_track_html = """
                 <section class="missed-track-section">
                   <div class="missed-track-header">
-                    <h2>記録漏れログ</h2>
+                    <h2>作業修正・連絡ログ</h2>
                     <span>{count}件</span>
                   </div>
                   <div class="missed-track-table-wrapper">

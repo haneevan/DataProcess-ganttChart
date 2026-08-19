@@ -12,6 +12,23 @@
   let activeContentFilters   = new Set();
   let currentFilterColumn    = '';
   let durationSortMode       = 'none'; // 'none' (default), 'desc' (max->min), 'asc' (min->max)
+  let summaryViewState       = null;
+
+  function saveSummaryViewState() {
+    const operator = document.getElementById('summaryOpSelect')?.value;
+    const start = document.getElementById('sumStartDate')?.value;
+    const end = document.getElementById('sumEndDate')?.value;
+    if (!operator || !start || !end) return;
+
+    summaryViewState = {
+      operator,
+      start,
+      end,
+      equipmentFilters: [...activeEquipmentFilters],
+      contentFilters: [...activeContentFilters],
+      durationSortMode
+    };
+  }
 
   // ── Navigation ──────────────────────────────────────────────────
   function showScreen(id) {
@@ -232,28 +249,37 @@
     const homeOp    = document.getElementById('opSelect').value;
     const homeDate  = document.getElementById('dateInput').value;
 
-    if (homeOp) {
+    if (summaryViewState && allCsvList.some(item => item.operator === summaryViewState.operator)) {
+      sumSel.value = summaryViewState.operator;
+      document.getElementById('sumStartDate').value = summaryViewState.start;
+      document.getElementById('sumEndDate').value = summaryViewState.end;
+      activeEquipmentFilters = new Set(summaryViewState.equipmentFilters);
+      activeContentFilters = new Set(summaryViewState.contentFilters);
+      durationSortMode = summaryViewState.durationSortMode;
+    } else if (homeOp) {
       sumSel.value = homeOp;
     } else if (sumSel.options.length > 0) {
       sumSel.selectedIndex = 0;
     }
 
-    if (homeDate) {
-      document.getElementById('sumStartDate').value = homeDate;
-      document.getElementById('sumEndDate').value   = homeDate;
-    } else {
-      const currentOp = sumSel.value;
-      if (currentOp) {
-        const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
-        if (opDates.length > 0) {
-          const newest = opDates[opDates.length - 1];
-          document.getElementById('sumStartDate').value = newest;
-          document.getElementById('sumEndDate').value   = newest;
+    if (!summaryViewState) {
+      if (homeDate) {
+        document.getElementById('sumStartDate').value = homeDate;
+        document.getElementById('sumEndDate').value   = homeDate;
+      } else {
+        const currentOp = sumSel.value;
+        if (currentOp) {
+          const opDates = allCsvList.filter(item => item.operator === currentOp).map(item => item.date).sort();
+          if (opDates.length > 0) {
+            const newest = opDates[opDates.length - 1];
+            document.getElementById('sumStartDate').value = newest;
+            document.getElementById('sumEndDate').value   = newest;
+          }
         }
       }
     }
 
-    loadSummaryData();
+    loadSummaryData(Boolean(summaryViewState));
   }
 
   function onSummaryOperatorChange() {
@@ -266,6 +292,9 @@
         document.getElementById('sumEndDate').value   = newestDate;
       }
     }
+    summaryViewState = null;
+    activeEquipmentFilters = new Set();
+    activeContentFilters = new Set();
     loadSummaryData();
   }
 
@@ -290,7 +319,7 @@
     });
   }
 
-  function loadSummaryData() {
+  function loadSummaryData(preserveFilters = false) {
     const operator = document.getElementById('summaryOpSelect').value;
     const start    = document.getElementById('sumStartDate').value;
     const end      = document.getElementById('sumEndDate').value;
@@ -300,7 +329,9 @@
       return;
     }
 
-    durationSortMode = 'none'; // Reset sort when loading new data
+    if (!preserveFilters) {
+      durationSortMode = 'none'; // Reset sort when loading new data
+    }
     updateSortButtonState();
 
     const tbody = document.getElementById('sum-detail-tbody');
@@ -317,11 +348,19 @@
 
       rawSummaryData = data;
 
-      activeEquipmentFilters = new Set(data.rows.map(r => r.equipment));
-      activeContentFilters   = new Set(data.rows.map(r => r.content));
+      if (preserveFilters) {
+        const availableEquipment = new Set(data.rows.map(r => r.equipment));
+        const availableContent = new Set(data.rows.map(r => r.content));
+        activeEquipmentFilters = new Set([...activeEquipmentFilters].filter(item => availableEquipment.has(item)));
+        activeContentFilters = new Set([...activeContentFilters].filter(item => availableContent.has(item)));
+      } else {
+        activeEquipmentFilters = new Set(data.rows.map(r => r.equipment));
+        activeContentFilters   = new Set(data.rows.map(r => r.content));
+      }
 
       updateFilterHeaderButtonsState();
       renderFilteredSummaryView();
+      saveSummaryViewState();
     });
   }
 
@@ -361,6 +400,7 @@
     }
     updateSortButtonState();
     renderFilteredSummaryView();
+    saveSummaryViewState();
   }
 
   function updateSortButtonState() {
@@ -550,6 +590,7 @@
     closeFilterPopover();
     updateFilterHeaderButtonsState();
     renderFilteredSummaryView();
+    saveSummaryViewState();
   }
 
   function closeFilterPopover() {
